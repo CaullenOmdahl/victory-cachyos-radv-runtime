@@ -1,0 +1,113 @@
+From 9d288abfc92141fc05f118058782a1c1a25fe25b Mon Sep 17 00:00:00 2001
+From: Caullen Omdahl <77470883+CaullenOmdahl@users.noreply.github.com>
+Date: Fri, 27 Nov 2026 14:54:08 +0700
+Subject: [PATCH] winevulkan/win32u: wire vkMapMemory2/vkUnmapMemory2 core
+ aliases (R18)
+
+---
+ dlls/win32u/vulkan.c         | 13 ++++++++++---
+ dlls/winevulkan/make_vulkan  |  2 ++
+ include/wine/vulkan_driver.h |  2 ++
+ 3 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/win32u/vulkan.c b/dlls/win32u/vulkan.c
+index b201f51..20f8b4d 100644
+--- a/dlls/win32u/vulkan.c
++++ b/dlls/win32u/vulkan.c
+@@ -1881,7 +1881,7 @@ static VkResult win32u_vkMapMemory2KHR( VkDevice client_device, const VkMemoryMa
+         return VK_SUCCESS;
+     }
+ 
+-    if (physical_device->map_placed_align)
++    if (physical_device->map_placed_align && !(info.flags & VK_MEMORY_MAP_PLACED_BIT_EXT))
+     {
+         SIZE_T alloc_size = memory->size;
+ 
+@@ -1901,6 +1901,8 @@ static VkResult win32u_vkMapMemory2KHR( VkDevice client_device, const VkMemoryMa
+ 
+     if (device->p_vkMapMemory2KHR)
+         res = device->p_vkMapMemory2KHR( device->host.device, &info, data );
++    else if (device->p_vkMapMemory2)
++        res = device->p_vkMapMemory2( device->host.device, &info, data );
+     else
+     {
+         if (info.pNext) FIXME( "struct extension chain not implemented!\n" );
+@@ -1959,7 +1961,7 @@ static VkResult win32u_vkUnmapMemory2KHR( VkDevice client_device, const VkMemory
+ 
+     if (memory->vm_map && physical_device->external_memory_align) return VK_SUCCESS;
+ 
+-    if (!device->p_vkUnmapMemory2KHR)
++    if (!device->p_vkUnmapMemory2KHR && !device->p_vkUnmapMemory2)
+     {
+         if (unmap_info->pNext || memory->vm_map) FIXME( "Not implemented\n" );
+         device->p_vkUnmapMemory( device->host.device, memory->obj.host.device_memory );
+@@ -1970,7 +1972,10 @@ static VkResult win32u_vkUnmapMemory2KHR( VkDevice client_device, const VkMemory
+     info.memory = memory->obj.host.device_memory;
+     if (memory->vm_map) info.flags |= VK_MEMORY_UNMAP_RESERVE_BIT_EXT;
+ 
+-    res = device->p_vkUnmapMemory2KHR( device->host.device, &info );
++    if (device->p_vkUnmapMemory2KHR)
++        res = device->p_vkUnmapMemory2KHR( device->host.device, &info );
++    else
++        res = device->p_vkUnmapMemory2( device->host.device, &info );
+ 
+     if (res == VK_SUCCESS && memory->vm_map)
+     {
+@@ -5165,6 +5170,7 @@ static struct vulkan_funcs vulkan_funcs =
+     .p_vkImportFenceWin32HandleKHR = win32u_vkImportFenceWin32HandleKHR,
+     .p_vkImportSemaphoreWin32HandleKHR = win32u_vkImportSemaphoreWin32HandleKHR,
+     .p_vkMapMemory = win32u_vkMapMemory,
++    .p_vkMapMemory2 = win32u_vkMapMemory2KHR,
+     .p_vkMapMemory2KHR = win32u_vkMapMemory2KHR,
+     .p_vkQueuePresentKHR = win32u_vkQueuePresentKHR,
+     .p_vkSetLatencySleepModeNV = win32u_vkSetLatencySleepModeNV,
+@@ -5172,6 +5178,7 @@ static struct vulkan_funcs vulkan_funcs =
+     .p_vkQueueSubmit2 = win32u_vkQueueSubmit2,
+     .p_vkQueueSubmit2KHR = win32u_vkQueueSubmit2KHR,
+     .p_vkUnmapMemory = win32u_vkUnmapMemory,
++    .p_vkUnmapMemory2 = win32u_vkUnmapMemory2KHR,
+     .p_vkUnmapMemory2KHR = win32u_vkUnmapMemory2KHR,
+     .p_vkGetSemaphoreCounterValue = win32u_vkGetSemaphoreCounterValue,
+     .p_vkGetSemaphoreCounterValueKHR = win32u_vkGetSemaphoreCounterValueKHR,
+diff --git a/dlls/winevulkan/make_vulkan b/dlls/winevulkan/make_vulkan
+index b466af1..08e5cbc 100755
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -234,12 +234,14 @@ USER_DRIVER_FUNCS = {
+     "vkImportFenceWin32HandleKHR",
+     "vkImportSemaphoreWin32HandleKHR",
+     "vkMapMemory",
++    "vkMapMemory2",
+     "vkMapMemory2KHR",
+     "vkQueuePresentKHR",
+     "vkQueueSubmit",
+     "vkQueueSubmit2",
+     "vkQueueSubmit2KHR",
+     "vkUnmapMemory",
++    "vkUnmapMemory2",
+     "vkUnmapMemory2KHR",
+     "vkGetSemaphoreCounterValue",
+     "vkGetSemaphoreCounterValueKHR",
+diff --git a/include/wine/vulkan_driver.h b/include/wine/vulkan_driver.h
+index 6de1084..cd4b815 100644
+--- a/include/wine/vulkan_driver.h
++++ b/include/wine/vulkan_driver.h
+@@ -374,6 +374,7 @@ struct vulkan_funcs
+     PFN_vkImportFenceWin32HandleKHR p_vkImportFenceWin32HandleKHR;
+     PFN_vkImportSemaphoreWin32HandleKHR p_vkImportSemaphoreWin32HandleKHR;
+     PFN_vkMapMemory p_vkMapMemory;
++    PFN_vkMapMemory2 p_vkMapMemory2;
+     PFN_vkMapMemory2KHR p_vkMapMemory2KHR;
+     PFN_vkQueuePresentKHR p_vkQueuePresentKHR;
+     PFN_vkSetLatencySleepModeNV p_vkSetLatencySleepModeNV;
+@@ -381,6 +382,7 @@ struct vulkan_funcs
+     PFN_vkQueueSubmit2 p_vkQueueSubmit2;
+     PFN_vkQueueSubmit2KHR p_vkQueueSubmit2KHR;
+     PFN_vkUnmapMemory p_vkUnmapMemory;
++    PFN_vkUnmapMemory2 p_vkUnmapMemory2;
+     PFN_vkUnmapMemory2KHR p_vkUnmapMemory2KHR;
+     PFN_vkGetSemaphoreCounterValue p_vkGetSemaphoreCounterValue;
+     PFN_vkGetSemaphoreCounterValueKHR p_vkGetSemaphoreCounterValueKHR;
+-- 
+2.56.1
+
