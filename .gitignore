@@ -1,5 +1,5 @@
 # Build artifacts & intermediate objects
-build/
+/build/
 *.o
 *.a
 *.dll
@@ -8,9 +8,9 @@ build/
 .wraplock
 
 # Upstream / forked source checkouts (tracked separately)
-wine-cachyos/
-vkd3d-proton/
-bcpack-gpu-sdk/
+/wine-cachyos/
+/vkd3d-proton/
+/bcpack-gpu-sdk/
 
 # Local / temporary logs
 *.log

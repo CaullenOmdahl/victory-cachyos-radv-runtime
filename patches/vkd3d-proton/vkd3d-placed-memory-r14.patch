@@ -1,0 +1,77 @@
+diff --git a/libs/vkd3d/device.c b/libs/vkd3d/device.c
+index 08b9e26..e800035 100644
+--- a/libs/vkd3d/device.c
++++ b/libs/vkd3d/device.c
+@@ -108,6 +108,7 @@ static const struct vkd3d_optional_extension_info optional_device_extensions[] =
+     VK_EXTENSION_COND(KHR_DEVICE_FAULT, KHR_device_fault, VKD3D_CONFIG_FLAG_STATIC(FAULT)),
+     VK_EXTENSION_COND(KHR_SHADER_ABORT, KHR_shader_abort, VKD3D_CONFIG_FLAG_STATIC(FAULT)),
+     VK_EXTENSION_COND(KHR_SHADER_CONSTANT_DATA, KHR_shader_constant_data, VKD3D_CONFIG_FLAG_STATIC(FAULT)),
++    VK_EXTENSION(KHR_MAP_MEMORY_2, KHR_map_memory2),
+     /* EXT extensions */
+     VK_EXTENSION(EXT_CONDITIONAL_RENDERING, EXT_conditional_rendering),
+     VK_EXTENSION(EXT_CONSERVATIVE_RASTERIZATION, EXT_conservative_rasterization),
+@@ -146,6 +147,7 @@ static const struct vkd3d_optional_extension_info optional_device_extensions[] =
+     VK_EXTENSION_DISABLE_COND(EXT_RAY_TRACING_INVOCATION_REORDER, EXT_ray_tracing_invocation_reorder, VKD3D_CONFIG_FLAG_STATIC(NO_DXR)),
+     VK_EXTENSION(EXT_SHADER_LONG_VECTOR, EXT_shader_long_vector),
+     VK_EXTENSION(EXT_SHADER_ATOMIC_FLOAT, EXT_shader_atomic_float),
++    VK_EXTENSION(EXT_MAP_MEMORY_PLACED, EXT_map_memory_placed),
+     /* AMD extensions */
+     VK_EXTENSION(AMD_BUFFER_MARKER, AMD_buffer_marker),
+     VK_EXTENSION(AMD_DEVICE_COHERENT_MEMORY, AMD_device_coherent_memory),
+@@ -1724,6 +1726,13 @@ static void vkd3d_physical_device_info_init(struct vkd3d_physical_device_info *i
+         vk_prepend_struct(&info->features2, &info->zero_initialize_device_memory_features);
+     }
+ 
++    if (vulkan_info->EXT_map_memory_placed)
++    {
++        info->map_memory_placed_features.sType =
++                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT;
++        vk_prepend_struct(&info->features2, &info->map_memory_placed_features);
++    }
++
+     if (vulkan_info->KHR_device_address_commands)
+     {
+         info->device_address_commands_features.sType =
+@@ -3283,6 +3292,14 @@ static HRESULT vkd3d_create_vk_device(struct d3d12_device *device,
+         return hresult_from_vk_result(vr);
+     }
+ 
++    if (device->vk_info.EXT_map_memory_placed)
++    {
++        INFO("VK_EXT_map_memory_placed enabled (memoryMapPlaced=%u, memoryMapRangePlaced=%u, memoryUnmapReserve=%u).\n",
++                device->device_info.map_memory_placed_features.memoryMapPlaced,
++                device->device_info.map_memory_placed_features.memoryMapRangePlaced,
++                device->device_info.map_memory_placed_features.memoryUnmapReserve);
++    }
++
+     if (FAILED(hr = vkd3d_load_vk_device_procs(&device->vk_procs, vk_procs, vk_device)))
+     {
+         ERR("Failed to load device procs, hr %#x.\n", (int)hr);
+diff --git a/libs/vkd3d/vkd3d_private.h b/libs/vkd3d/vkd3d_private.h
+index 26b09c1..97e56f2 100644
+--- a/libs/vkd3d/vkd3d_private.h
++++ b/libs/vkd3d/vkd3d_private.h
+@@ -165,6 +165,7 @@ struct vkd3d_vulkan_info
+     bool KHR_device_fault;
+     bool KHR_shader_abort;
+     bool KHR_shader_constant_data;
++    bool KHR_map_memory2;
+     /* EXT device extensions */
+     bool EXT_conditional_rendering;
+     bool EXT_conservative_rasterization;
+@@ -204,6 +205,7 @@ struct vkd3d_vulkan_info
+     bool EXT_ray_tracing_invocation_reorder;
+     bool EXT_shader_long_vector;
+     bool EXT_shader_atomic_float;
++    bool EXT_map_memory_placed;
+     /* AMD device extensions */
+     bool AMD_buffer_marker;
+     bool AMD_device_coherent_memory;
+@@ -5471,6 +5473,7 @@ struct vkd3d_physical_device_info
+     VkPhysicalDeviceShaderAtomicFloatFeaturesEXT shader_atomic_float_features;
+     VkPhysicalDeviceShaderAbortFeaturesKHR shader_abort_features;
+     VkPhysicalDeviceShaderConstantDataFeaturesKHR shader_constant_data_features;
++    VkPhysicalDeviceMapMemoryPlacedFeaturesEXT map_memory_placed_features;
+ 
+     VkPhysicalDeviceFeatures2 features2;
+ 

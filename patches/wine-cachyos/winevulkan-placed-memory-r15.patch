@@ -1,0 +1,12 @@
+diff --git a/dlls/winevulkan/make_vulkan b/dlls/winevulkan/make_vulkan
+index 3395f22..b466af1 100755
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -123,7 +123,6 @@ UNSUPPORTED_EXTENSIONS = [
+ # winevulkan may nonetheless use, or extensions we want to generate headers for
+ # but not expose to applications (useful for test commits)
+ UNEXPOSED_EXTENSIONS = {
+-    "VK_EXT_map_memory_placed",
+     "VK_EXT_headless_surface",
+     # Extensions for other platforms
+     "VK_EXT_external_memory_dma_buf",
